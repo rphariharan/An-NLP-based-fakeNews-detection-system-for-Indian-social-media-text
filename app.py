@@ -104,8 +104,8 @@ def main():
             st.warning("Please enter some text to verify.")
         else:
             with st.spinner("Querying knowledge base..."):
-                # Real-time Prediction Module incorporating fact rules
-                final_verdict, confidence, actual_fact, provenance = final_prediction(news_text, model, vectorizer)
+                # Real-time Prediction Module incorporating Semantic Fact Check
+                final_verdict, sim_score, evidence, provenance = final_prediction(news_text, model, vectorizer)
                 
                 # Real-time Evidence Links fallback
                 evidence_link = get_evidence_links(news_text)
@@ -120,17 +120,16 @@ def main():
                 else:
                     st.markdown(f'<div style="color: #E65100; background-color: #FFF3E0; padding: 1rem; border-radius: 5px; border-left: 5px solid #F57C00; margin-top: 1rem;"><strong>⚠️ FINAL VERDICT: VERIFY</strong><br><em>Result based on {provenance}</em></div>', unsafe_allow_html=True)
                 
-                # UI Display: Confidence ONLY for ML Fallback
-                if confidence is not None:
-                    if isinstance(confidence, float):
-                        st.markdown(f"**ML Baseline Confidence:** {confidence:.2f}%")
-                    else:
-                        st.markdown(f"**ML Baseline Confidence:** High Confidence")
+                # Format semantic Confidence
+                if provenance == "Semantic Verification" and isinstance(sim_score, float):
+                    st.markdown(f"**Semantic Similarity Score:** {sim_score:.2f}")
+                elif provenance != "Semantic Verification":
+                    st.markdown(f"**ML Baseline Evaluator Warning** (Semantic logic bypassed)")
                 
                 # Specific explicit container for the Actual fact fetched 
-                if actual_fact and actual_fact != "No reliable evidence found.":
-                    st.info(f"**Actual Fact Retrieved:**\n\n{actual_fact}")
-                elif final_verdict.upper() == 'VERIFY':
+                if evidence:
+                    st.info(f"**Retrieved Evidence Text:**\n\n{evidence}")
+                else:
                     st.warning("Could not fetch a definitive fact for this claim directly from Wikipedia. Please run independent searches.")
                     
                 # UI Display: Real-time Google Evidence Link fallback
