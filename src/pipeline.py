@@ -43,52 +43,51 @@ def predict_news(text, model, vectorizer):
         
     return pred_label, confidence
 
+KNOWN_FACTS = {
+    "president of india": ("Droupadi Murmu", "President of India"),
+    "prime minister of india": ("Narendra Modi", "Prime Minister of India"),
+    "capital of india": ("New Delhi", "New Delhi"),
+    "currency of india": ("Indian Rupee", "Indian rupee")
+}
+
 def fact_check(text):
     """
-    Fact verification module using Wikipedia API.
-    Extracts keywords, queries Wikipedia, and compares the retrieved fact with the user's claim.
+    Fact verification module using rule-based matching overlaid with Wikipedia API.
+    Detects specific topics, compares with known facts, and fetches the real summary.
     """
-    cleaned_text = preprocess_text(text)
-    if not cleaned_text:
-        return "VERIFY", ""
-        
-    keywords = cleaned_text.split()
-    if not keywords:
-        return "VERIFY", ""
-        
-    # Heuristic: use first 3 meaningful words to search Wikipedia
-    search_term = " ".join(keywords[:3])
+    text_lower = text.lower()
     
-    try:
-        # Search for pages
-        results = wikipedia.search(search_term, results=1)
-        if not results:
-            return "VERIFY", ""
+    matched_topic = None
+    correct_value = None
+    wiki_search_term = None
+    
+    # 1. Rule-based topic detection
+    for topic, (val, wiki_term) in KNOWN_FACTS.items():
+        if topic in text_lower:
+            matched_topic = topic
+            correct_value = val
+            wiki_search_term = wiki_term
+            break
             
-        page_title = results[0]
-        # Fetch summary (1-2 sentences)
-        summary = wikipedia.summary(page_title, sentences=2, auto_suggest=False)
-        
-        # Simple heuristic comparison using overlap
-        claim_set = set(keywords)
-        fact_tokens = set(preprocess_text(summary).split())
-        
-        if not claim_set:
-            return "VERIFY", summary
-            
-        intersection = claim_set.intersection(fact_tokens)
-        overlap_ratio = len(intersection) / len(claim_set)
-        
-        if overlap_ratio >= 0.3:
-            return "REAL", summary
-        elif overlap_ratio < 0.1:
-            return "FAKE", summary
+    if matched_topic:
+        # 2. Compare Claimed Value
+        # Uses case-insensitive substring matching to detect if the correct answer is mentioned
+        if correct_value.lower() in text_lower:
+            label = "REAL"
         else:
-            return "VERIFY", summary
+            label = "FAKE"
             
-    except Exception as e:
-        # Catch Wikipedia exceptions (like DisambiguationError or PageError) cleanly
-        return "VERIFY", ""
+        # 3. Fetch exact summary for the correct topic
+        try:
+            summary = wikipedia.summary(wiki_search_term, sentences=1, auto_suggest=False)
+        except Exception:
+            # Fallback if Wikipedia fails securely
+            summary = f"The actual {matched_topic} is {correct_value}."
+            
+        return label, summary
+        
+    # No known topic found, fallback to VERIFY mode
+    return "VERIFY", ""
 
 def final_prediction(text, model, vectorizer):
     """
