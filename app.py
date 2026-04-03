@@ -3,12 +3,12 @@ import pickle
 import os
 import urllib.parse
 
-from src.pipeline import predict_news, get_evidence_links
+from src.pipeline import final_prediction, get_evidence_links
 
 # Set page configuration
 st.set_page_config(
-    page_title="Fake News Detector",
-    page_icon="📰",
+    page_title="Fact Verification System",
+    page_icon="🔍",
     layout="centered"
 )
 
@@ -26,7 +26,7 @@ st.markdown("""
     }
     .stButton>button {
         width: 100%;
-        background-color: #4CAF50;
+        background-color: #1976D2;
         color: white;
         border-radius: 5px;
         border: none;
@@ -34,7 +34,7 @@ st.markdown("""
         font-weight: bold;
     }
     .stButton>button:hover {
-        background-color: #45a049;
+        background-color: #1565C0;
     }
     .fake-alert {
         color: #D32F2F;
@@ -82,8 +82,8 @@ def load_models():
     return model, vectorizer
 
 def main():
-    st.title("📰 Fake News Detection System")
-    st.markdown("### Real-time Prediction Engine")
+    st.title("🔍 Fact Verification System")
+    st.markdown("### Real-time Claim Verification Engine")
     st.markdown("---")
     
     # 1. Load Pre-trained Model and Vectorizer
@@ -93,41 +93,49 @@ def main():
         st.error("Model files not found! Please make sure to run `python train_and_save.py` first to generate models in `saved_models/`.")
         return
         
-    st.write("Enter the news text or social media forward below to get instant real-time prediction.")
+    st.write("Enter an article excerpt, news, or claim below to verify its truthfulness.")
     
     # 2. Text input area
-    news_text = st.text_area("Enter News Text", height=150, placeholder="E.g., Government giving ₹10000 to every citizen apply now")
+    news_text = st.text_area("Enter News or Claim", height=150, placeholder="E.g., The Eiffel tower is located in London.")
     
-    # 3. Check News Button
-    if st.button("Check News"):
+    # 3. Verify Now Button
+    if st.button("Verify Now"):
         if not news_text.strip():
-            st.warning("Please enter some text to analyze.")
+            st.warning("Please enter some text to verify.")
         else:
-            with st.spinner("Analyzing real-time..."):
-                # Real-time Prediction Module
-                prediction, confidence = predict_news(news_text, model, vectorizer)
+            with st.spinner("Querying knowledge base and ML models..."):
+                # Real-time Prediction Module incorporating Wikipedia Fact Check
+                final_verdict, confidence, actual_fact = final_prediction(news_text, model, vectorizer)
                 
-                # Real-time Evidence Links
+                # Real-time Evidence Links fallback
                 evidence_link = get_evidence_links(news_text)
                 
                 # Format confidence as percentage
                 if isinstance(confidence, float):
-                    conf_str = f"Confidence: {confidence:.2f}%"
+                    conf_str = f"ML Basline Confidence: {confidence:.2f}%"
                 else:
                     conf_str = "High Confidence"
                 
-                st.subheader("Real-Time Analysis Result")
+                st.subheader("Verification Result")
                 
-                # UI Display: Prediction & Confidence
-                if prediction.lower() == 'fake':
-                    st.markdown(f'<div class="fake-alert"><strong>🚨 THIS APPEARS TO BE FAKE NEWS</strong><br>{conf_str}</div>', unsafe_allow_html=True)
+                # UI Display: Prediction Verdict & Confidence
+                if final_verdict.upper() == 'FAKE':
+                    st.markdown(f'<div class="fake-alert"><strong>🚨 FINAL VERDICT: FAKE</strong><br>{conf_str}</div>', unsafe_allow_html=True)
+                elif final_verdict.upper() == 'REAL':
+                    st.markdown(f'<div class="real-alert"><strong>✅ FINAL VERDICT: REAL</strong><br>{conf_str}</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="real-alert"><strong>✅ THIS APPEARS TO BE REAL NEWS</strong><br>{conf_str}</div>', unsafe_allow_html=True)
+                    st.warning(f"**NEEDS VERIFICATION** (Result: {final_verdict})<br>{conf_str}")
                 
-                # UI Display: Real-time Evidence Link
+                # Specific explicit container for the Actual fact fetched 
+                if actual_fact:
+                    st.info(f"**Actual Fact from Knowledge Base (Wikipedia):**\n\n{actual_fact}")
+                else:
+                    st.info("Could not fetch a definitive fact for this claim directly from Wikipedia.")
+                    
+                # UI Display: Real-time Google Evidence Link fallback
                 st.markdown(f'''
                 <div class="evidence-link">
-                    <strong>🔍 Check Real-Time Evidence:</strong><br>
+                    <strong>🔍 Check alternative Real-Time Evidence:</strong><br>
                     <a href="{evidence_link}" target="_blank">Search Google for related facts based on keywords</a>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -135,14 +143,15 @@ def main():
     # Optional sidebar for info
     st.sidebar.title("About the System")
     st.sidebar.info("""
-    Real-Time Fake News Detection Pipeline.
+    Real-Time Fact Verification Pipeline.
     
     **Features:**
-    - Loads pre-trained models via `pickle`
+    - Live Wikipedia queries for Fact Checking
+    - Baseline ML Predictions using SVM via `pickle`
     - No runtime retraining (Fast Response)
-    - Keyword extraction & Fact-check Google Search Support
+    - Google Fact-check hyperlink fallbacks
     
-    *Powered by SVM & Streamlit.*
+    *Built with Wikipedia API, Streamlit, and Scikit-learn.*
     """)
 
 if __name__ == "__main__":
