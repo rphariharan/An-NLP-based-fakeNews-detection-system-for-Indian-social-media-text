@@ -103,34 +103,35 @@ def main():
         if not news_text.strip():
             st.warning("Please enter some text to verify.")
         else:
-            with st.spinner("Querying knowledge base and ML models..."):
-                # Real-time Prediction Module incorporating Wikipedia Fact Check
-                final_verdict, confidence, actual_fact = final_prediction(news_text, model, vectorizer)
+            with st.spinner("Querying knowledge base..."):
+                # Real-time Prediction Module incorporating fact rules
+                final_verdict, confidence, actual_fact, provenance = final_prediction(news_text, model, vectorizer)
                 
                 # Real-time Evidence Links fallback
                 evidence_link = get_evidence_links(news_text)
                 
-                # Format confidence as percentage
-                if isinstance(confidence, float):
-                    conf_str = f"ML Basline Confidence: {confidence:.2f}%"
-                else:
-                    conf_str = "High Confidence"
-                
                 st.subheader("Verification Result")
                 
-                # UI Display: Prediction Verdict & Confidence
+                # UI Display: Prediction Verdict & Logic Mapping
                 if final_verdict.upper() == 'FAKE':
-                    st.markdown(f'<div class="fake-alert"><strong>🚨 FINAL VERDICT: FAKE</strong><br>{conf_str}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="fake-alert"><strong>❌ FINAL VERDICT: FAKE</strong><br><em>Result based on {provenance}</em></div>', unsafe_allow_html=True)
                 elif final_verdict.upper() == 'REAL':
-                    st.markdown(f'<div class="real-alert"><strong>✅ FINAL VERDICT: REAL</strong><br>{conf_str}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="real-alert"><strong>✅ FINAL VERDICT: REAL</strong><br><em>Result based on {provenance}</em></div>', unsafe_allow_html=True)
                 else:
-                    st.warning(f"**NEEDS VERIFICATION** (Result: {final_verdict})<br>{conf_str}")
+                    st.markdown(f'<div style="color: #E65100; background-color: #FFF3E0; padding: 1rem; border-radius: 5px; border-left: 5px solid #F57C00; margin-top: 1rem;"><strong>⚠️ FINAL VERDICT: VERIFY</strong><br><em>Result based on {provenance}</em></div>', unsafe_allow_html=True)
+                
+                # UI Display: Confidence ONLY for ML Fallback
+                if confidence is not None:
+                    if isinstance(confidence, float):
+                        st.markdown(f"**ML Baseline Confidence:** {confidence:.2f}%")
+                    else:
+                        st.markdown(f"**ML Baseline Confidence:** High Confidence")
                 
                 # Specific explicit container for the Actual fact fetched 
-                if actual_fact:
-                    st.info(f"**Actual Fact from Knowledge Base (Wikipedia):**\n\n{actual_fact}")
-                else:
-                    st.info("Could not fetch a definitive fact for this claim directly from Wikipedia.")
+                if actual_fact and actual_fact != "No reliable evidence found.":
+                    st.info(f"**Actual Fact Retrieved:**\n\n{actual_fact}")
+                elif final_verdict.upper() == 'VERIFY':
+                    st.warning("Could not fetch a definitive fact for this claim directly from Wikipedia. Please run independent searches.")
                     
                 # UI Display: Real-time Google Evidence Link fallback
                 st.markdown(f'''
@@ -146,12 +147,10 @@ def main():
     Real-Time Fact Verification Pipeline.
     
     **Features:**
-    - Live Wikipedia queries for Fact Checking
-    - Baseline ML Predictions using SVM via `pickle`
-    - No runtime retraining (Fast Response)
-    - Google Fact-check hyperlink fallbacks
-    
-    *Built with Wikipedia API, Streamlit, and Scikit-learn.*
+    - Priority Rules-Based Fallback logic natively defending standard truth queries
+    - Live Wikipedia queries for dynamic Fact Checking
+    - Baseline ML Predictions mapping unknown inferences via SVM `pickle`
+    - Google Fact-check hyperlink queries
     """)
 
 if __name__ == "__main__":

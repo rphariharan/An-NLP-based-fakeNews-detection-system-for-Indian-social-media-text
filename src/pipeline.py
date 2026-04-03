@@ -43,71 +43,65 @@ def predict_news(text, model, vectorizer):
         
     return pred_label, confidence
 
-KNOWN_FACTS = {
-    "president of india": ("Droupadi Murmu", "President of India"),
-    "prime minister of india": ("Narendra Modi", "Prime Minister of India"),
-    "capital of india": ("New Delhi", "New Delhi"),
-    "currency of india": ("Indian Rupee", "Indian rupee")
-}
+from .fact_rules import verify_known_facts
 
-def fact_check(text):
+def fact_check_wiki(text):
     """
-    Fact verification module using rule-based matching overlaid with Wikipedia API.
-    Detects specific topics, compares with known facts, and fetches the real summary.
+    Fact verification module using Wikipedia API heavily constrained as fallback.
+    Extracts keywords, queries Wikipedia, and compares the retrieved fact with the user's claim.
     """
-    text_lower = text.lower()
-    
-    matched_topic = None
-    correct_value = None
-    wiki_search_term = None
-    
-    # 1. Rule-based topic detection
-    for topic, (val, wiki_term) in KNOWN_FACTS.items():
-        if topic in text_lower:
-            matched_topic = topic
-            correct_value = val
-            wiki_search_term = wiki_term
-            break
-            
-    if matched_topic:
-        # 2. Compare Claimed Value
-        # Uses case-insensitive substring matching to detect if the correct answer is mentioned
-        if correct_value.lower() in text_lower:
-            label = "REAL"
-        else:
-            label = "FAKE"
-            
-        # 3. Fetch exact summary for the correct topic
-        try:
-            summary = wikipedia.summary(wiki_search_term, sentences=1, auto_suggest=False)
-        except Exception:
-            # Fallback if Wikipedia fails securely
-            summary = f"The actual {matched_topic} is {correct_value}."
-            
-        return label, summary
+    cleaned_text = preprocess_text(text)
+    if not cleaned_text:
+        return "VERIFY", ""
         
-    # No known topic found, fallback to VERIFY mode
-    return "VERIFY", ""
+    keywords = cleaned_text.split()
+    if not keywords:
+        return "VERIFY", ""
+        
+    search_term = " ".join(keywords[:3])
+    
+    try:
+        results = wikipedia.search(search_term, results=1)
+        if not results:
+            return "VERIFY", ""
+            
+        page_title = results[0]
+        summary = wikipedia.summary(page_title, sentences=2, auto_suggest=False)
+        
+        claim_set = set(keywords)
+        fact_tokens = set(preprocess_text(summary).split())
+        
+        if not claim_set:
+            return "VERIFY", summary
+            
+        intersection = claim_set.intersection(fact_tokens)
+        overlap_ratio = len(intersection) / len(claim_set)
+        
+        if overlap_ratio >= 0.3:
+            return "REAL", summary
+        else:
+            return "VERIFY", summary
+            
+    except Exception as e:
+        return "VERIFY", ""
 
 def final_prediction(text, model, vectorizer):
     """
-    Prediction flow integrating both ML baseline and Wikipedia Fact Check.
+    Prediction flow integrating Rule-based > Wikipedia Fact Check > ML baseline.
     """
-    # 1. Run standard ML prediction
+    # 1. Evaluate Rule-based
+    rule_label, actual_fact = verify_known_facts(text)
+    if rule_label:
+        return rule_label, None, actual_fact, "rule-based knowledge"
+    
+    # 2. Evaluate Wikipedia
+    wiki_label, wiki_fact = fact_check_wiki(text)
+    if wiki_label in ["REAL", "FAKE"]:
+        return wiki_label, None, wiki_fact, "external verification"
+
+    # 3. ML Evaluator (Fallback for Confidence only, default return is VERIFY)
     ml_pred, confidence = predict_news(text, model, vectorizer)
-    
-    # 2. Run fact verification
-    fact_label, actual_fact = fact_check(text)
-    
-    # 3. Combine results based on logical fallback
-    if fact_label == "FAKE":
-        final_label = "Fake"
-    elif fact_label == "REAL":
-        final_label = "Real"
-    else:
-        final_label = ml_pred
-        
-    return final_label, confidence, actual_fact
+    return "VERIFY", confidence, "No reliable evidence found.", "ML fallback"
 
 def get_evidence_links(text):
     """
